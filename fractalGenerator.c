@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <math.h>
 
+//  ---------------- Mandlebrot set fractal generator ---------------------------
+
 typedef struct complex{
-    float a;
-    float b;
+    float a;    // real part
+    float b;    // imaginary part
 }complex; 
 
 complex comAdd(complex x, complex y){
@@ -25,15 +27,15 @@ float comSquareMag(complex x){
 }
 
 int mandlebrot(complex c){
-    complex z = {0};  // Set all feilds to zero
-    for (int i = 0; i < 100; i++){
+    complex z = {0};    // Set all feilds to zero
+    for (int i = 0; i < 10; i++){
         if (comSquareMag(z) > 4){
-            return i;
+            return i;    // point NOT in set
         }
         z = comMultiply(z, z);
         z = comAdd(z, c);
     }
-    return -1;
+    return -1;    // point IS in set
 }
 
 float lerp(float num1, float num2, float x) {
@@ -67,17 +69,41 @@ int generateFractal (int imHeight, int imWidth,
 }
 
 
+// ---------------------- Convolution kernel for edge detection ------------------------
+
+int sobel_x[3][3] = {
+    {-1, 0, 1},
+    {-2, 0, 2},
+    {-1, 0, 1}
+};
+
+int sobel_y[3][3] = {
+    {-1, -2, -1},
+    {0, 0, 0},
+    {1, 2, 1}
+};
+
+
+
+void simplifiedVisualization() {
+    for(float imag = 2; imag > -2; imag -= 0.1){
+        for(float real = -2; real < 2; real += 0.1){
+            if(mandlebrot((complex) {real, imag}) == -1){
+                putchar('x');
+            }else {
+                putchar(' ');
+            }
+        }
+        putchar('\n');
+    }
+};
+
+
+
+
+
 int main(){
     // --------------------- printing super simple image to the terminal
-    // for(float imag = 2; imag > -2; imag -= 0.1){
-    //     for(float real = -2; real < 2; real += 0.1){
-    //         if(mandlebrot((complex) {real, imag}) == -1){
-    //             putchar('x');
-    //         }else {
-    //             putchar(' ');
-    //         }
-    //     }
-    //     putchar('\n');
-    // }
+    // simplifiedVisualization();
     generateFractal(100, 120, -2, 2, -2, 2);
 }
