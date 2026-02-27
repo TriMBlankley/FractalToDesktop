@@ -79,5 +79,5 @@ int main(){
     //     }
     //     putchar('\n');
     // }
-    generateFractal(10000, 10000, -2, 2, -2, 2);
+    generateFractal(100, 120, -2, 2, -2, 2);
 }
