@@ -4,8 +4,8 @@
 #include <time.h>
 #include <stdbool.h>
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
-#include "stb_image_resize2.h"
 
 typedef uint64_t u64;
 
@@ -56,9 +56,9 @@ double comSquareMag(complex x){
     return (x.a * x.a) + (x.b * x.b);
 }
 
-int mandlebrot(complex c){
+int mandlebrot(complex c, int iterations){
     complex z = {0};    // Set all feilds to zero
-    for (int i = 0; i < 1000; i++){
+    for (int i = 0; i < iterations; i++){
         if (comSquareMag(z) > 4){
             return i;    // point NOT in set
         }
@@ -67,6 +67,7 @@ int mandlebrot(complex c){
     }
     return -1;    // point IS in set
 }
+
 
 double lerp(double num1, double num2, double x) {
     return x * (num2 - num1) + num1;
@@ -77,31 +78,7 @@ double unlerp(double num1, double num2, double y) {
 }
 
 
-// ---------------  Final fractal Image Generation ----------------------------
-
-int generateFractalImage (int imHeight, int imWidth, 
-                          double minX, double maxX, 
-                          double minY, double maxY){
-                          
-    // header of the ppm image file
-    printf("P3\n%d %d\n255\n", imWidth, imHeight);
-
-    // Iterate over x, and y to create the size of the image
-    for (int y = 0; y < imHeight; y++){
-        for (int x = 0; x < imWidth; x++){
-            double iterations = mandlebrot((complex) {
-                lerp(minX, maxX, unlerp(0, imWidth, x)),
-                lerp(minY, maxY, unlerp(imHeight, 0, y))
-            });
-            iterations = iterations * 0.25;
-            int red = lerp(0, 255, unlerp(-1, 1, -cos(iterations * 0.1)));
-            int green = lerp(0, 255, unlerp(-1, 1, -cos(iterations * 0.11)));
-            int blue = lerp(0, 255, unlerp(-1, 1, -cos(iterations * 0.13)));
-            printf("%d %d %d ", red, green, blue);
-        }
-    }
-};
-
+// -------------- Find a coordintate that borders points in the set -------------------------------------------
 
 complex coordinateFinder(int imHeight, int imWidth,
                              double minX, double maxX, 
@@ -116,7 +93,7 @@ complex coordinateFinder(int imHeight, int imWidth,
             if(mandlebrot((complex) {
                 lerp(minX, maxX, unlerp(0, imWidth, x)),
                 lerp(minY, maxY, unlerp(imHeight, 0, y))
-            }) == -1){
+            }, 100) == -1){
                 simpleFractal[y][x] = 1;
             }else {
                 simpleFractal[y][x] = 0;
@@ -128,7 +105,7 @@ complex coordinateFinder(int imHeight, int imWidth,
     int index = 0;
     for (int yOut = 1; yOut < imHeight - 1; yOut++){
         for (int xOut = 1; xOut < imWidth - 1; xOut++){
-            if(simpleFractal[yOut][xOut] == 1) continue;
+            if(simpleFractal[yOut][xOut] == 1) continue;  // breaks if the point is in the set
             if (simpleFractal[yOut - 1][xOut - 1] +
                 simpleFractal[yOut - 1][xOut    ] +
                 simpleFractal[yOut - 1][xOut + 1] +
@@ -136,64 +113,145 @@ complex coordinateFinder(int imHeight, int imWidth,
                 simpleFractal[yOut + 1][xOut - 1] +
                 simpleFractal[yOut + 1][xOut    ] +
                 simpleFractal[yOut + 1][xOut + 1] +
-                simpleFractal[yOut    ][xOut - 1] == 0) continue;
-
+                simpleFractal[yOut    ][xOut - 1] == 0) continue;  // breaks if the point does not neigbor a location in the set
+            
+            // Add the point to the fractal edge lists
             fractalEdgeX[index] = xOut;
             fractalEdgeY[index] = yOut;
             index++;  
         }
     }
 
-
-    // Choose the random edge case.
-    for (int r = 0; r < 5; r++){
-        randu64(&rng);
+    // ---------- Simple Terminal View ---------------------------------------
+    for (int yPrint = 1; yPrint < imHeight - 1; yPrint++){
+        for (int xPrint = 1; xPrint < imWidth - 1; xPrint++){
+            bool isEdge = false;
+            for (int i =0; i < index; i++){
+                if (fractalEdgeX[i] == xPrint && fractalEdgeY[i] == yPrint){
+                    printf("\033[7m%d\033[0m", simpleFractal[yPrint][xPrint]);
+                    isEdge = true;
+                } 
+            } 
+            if (isEdge == false){
+                printf("%d", simpleFractal[yPrint][xPrint]);
+            }
+        }
+        printf("\n");
     }
+
+
+    // Initialize the random number generator
+    for (int r = 0; r < 5; r++) randu64(&rng);
+    
+    // Choose the random edge case.
     int randIndex = randu64(&rng) % index;
 
-    // ---------- Simple Terminal View ---------------------------------------
-    // for (int yPrint = 1; yPrint < imHeight - 1; yPrint++){
-    //     for (int xPrint = 1; xPrint < imWidth - 1; xPrint++){
-    //         bool isEdge = false;
-    //         for (int i =0; i < index; i++){
-    //             if (fractalEdgeX[i] == xPrint && fractalEdgeY[i] == yPrint){
-    //                 printf("\033[7m%d\033[0m", simpleFractal[yPrint][xPrint]);
-    //                 isEdge = true;
-    //             } 
-    //         } 
-    //         if (isEdge == false){
-    //             printf("%d", simpleFractal[yPrint][xPrint]);
-    //         }
-    //     }
-    //     printf("\n");
-    // }
-
-
-
+    
+    // Returns the address of the fracal we are planning on rendering
     return (complex){lerp(minX, maxX, unlerp(0, imWidth, fractalEdgeX[randIndex])),
                      lerp(minY, maxY, unlerp(imHeight, 0, fractalEdgeY[randIndex]))
     };
- 
 };
 
+// ---------------  Final fractal Image Generation ----------------------------
+
+int generateFractalImage (const char *fileName, int imHeight, int imWidth, 
+                          double minX, double maxX, 
+                          double minY, double maxY, double palleteSweep){
+                          
+    int channels = 3; // RGB image
+    
+    // Allocate memory for the image (3 bytes per pixel: R, G, B)
+    // Data is stored as RGBRGBRGB... from left to right, top to bottom
+    unsigned char* image_data = (unsigned char*)malloc(imWidth * imHeight * channels);
+    
+    if (!image_data) {
+        return -1; // Allocation failed
+    }
+
+
+    // Iterate over x, and y to find the pixel at each point of the image
+    for (int y = 0; y < imHeight; y++){
+        for (int x = 0; x < imWidth; x++){
+        
+            int pixel_index = (y * imWidth + x) * channels;
+
+            image_data[pixel_index + 0] = 0;
+            image_data[pixel_index + 1] = 0;
+            image_data[pixel_index + 2] = 0;
+
+            // This next nested for loop is for the Anti-Aliasing.
+            for (double ySample = 0; ySample < 3; ySample++){
+                for (double xSample = 0; xSample < 3; xSample++){
+
+                    double iterations = mandlebrot((complex) {
+                        lerp(minX, maxX, unlerp(0, imWidth, x + xSample / 3)),
+                        lerp(minY, maxY, unlerp(imHeight, 0, y + ySample / 3))
+                    }, 2000);
+                    iterations = iterations * palleteSweep;
+
+                    image_data[pixel_index + 0] = image_data[pixel_index + 0] + lerp(0, 255, unlerp(-1, 1, -cos(iterations * 0.10))) / 9;
+                    image_data[pixel_index + 1] = image_data[pixel_index + 1] + lerp(0, 255, unlerp(-1, 1, -cos(iterations * 0.11))) / 9;
+                    image_data[pixel_index + 2] = image_data[pixel_index + 2] + lerp(0, 255, unlerp(-1, 1, -cos(iterations * 0.13))) / 9;
+                }
+            }
+
+        }
+    }
+
+    // Write the PNG file
+    // Parameters: filename, width, height, channels, data, stride_in_bytes
+    // stride_in_bytes = width * channels (0 means let the library calculate it)
+    int result = stbi_write_png(fileName, 
+                                imWidth, imHeight, channels, 
+                                image_data, imWidth * channels);
+    
+    // Check if writing was successful
+    if (result) {
+        printf("PNG file created successfully!\n");
+    } else {
+        printf("Error creating PNG file\n");
+    }
+    
+    // Free the allocated memory
+    free(image_data);
+    
+    return 0;
+}
+
+
+
+// Helper function to calculate the greatest common divisor (for aspect ratio)
+unsigned long long gcd(unsigned long long a, unsigned long long b) {
+    while (b) {
+        unsigned long long t = b;
+        b = a % b;
+        a = t;
+    }
+    return a;
+}
 
 
 int main(){
     rng.s[1] = 69420;
     rng.s[0] = time(NULL);
 
+    int tWidth  = 600;
+    int tHeight = 600;
+
     double minX = -2, maxX = 2, minY = -2, maxY = 2;
     
-    for (int depth = 0; depth < 5; depth ++){
+    for (int depth = 0; depth < 10; depth ++){
         complex coordinates = coordinateFinder(60, 60, minX, maxX, minY, maxY);
 
-        double zoomFacotr = 4;
-        minX = lerp(coordinates.a, minX, 1 / zoomFacotr);
-        maxX = lerp(coordinates.a, maxX, 1 / zoomFacotr);
-        minY = lerp(coordinates.b, minY, 1 / zoomFacotr);
-        maxY = lerp(coordinates.b, maxY, 1 / zoomFacotr);
+        double zoomFactor = 4;
+        minX = lerp(coordinates.a, minX, 1 / zoomFactor);
+        maxX = lerp(coordinates.a, maxX, 1 / zoomFactor);
+        minY = lerp(coordinates.b, minY, 1 / zoomFactor);
+        maxY = lerp(coordinates.b, maxY, 1 / zoomFactor);
     }
     
-    printf("Fractal Address: %d, %d, %d, %d", minX, maxX, minY, maxY);
-    generateFractalImage(1000, 1000, minX, maxX, minY, maxY);
+    printf("Fractal Address: %lf, %lf, %lf, %lf\n", minX, maxX, minY, maxY);
+    generateFractalImage("darkFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.1);
+    generateFractalImage("lightFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.3);
 }
