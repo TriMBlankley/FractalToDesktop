@@ -1,0 +1,13 @@
+{
+    "makefile.configureOnOpen": false,
+    "workbench.colorCustomizations": {
+        "titleBar.activeBackground": "#5f7567",
+        "titleBar.activeForeground": "#ffffff",
+        "activityBar.background": "#313d35",
+        "activityBar.foreground": "#ffffff",
+        "activityBar.inactiveForeground": "#ffffff66",
+        "activityBar.border": "#ffffff33",
+        "statusBar.background": "#313d35",
+        "statusBar.foreground": "#ffffff"
+    }
+}

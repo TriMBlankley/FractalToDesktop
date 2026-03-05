@@ -4,8 +4,12 @@
 #include <time.h>
 #include <stdbool.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+
+#include <opencv2/opencv.hpp>
 
 typedef uint64_t u64;
 
@@ -173,7 +177,7 @@ int generateFractalImage (const char *fileName, int imHeight, int imWidth,
     // Iterate over x, and y to find the pixel at each point of the image
     for (int y = 0; y < imHeight; y++){
         for (int x = 0; x < imWidth; x++){
-        
+
             int pixel_index = (y * imWidth + x) * channels;
 
             image_data[pixel_index + 0] = 0;
@@ -195,7 +199,6 @@ int generateFractalImage (const char *fileName, int imHeight, int imWidth,
                     image_data[pixel_index + 2] = image_data[pixel_index + 2] + lerp(0, 255, unlerp(-1, 1, -cos(iterations * 0.13))) / 9;
                 }
             }
-
         }
     }
 
@@ -208,7 +211,7 @@ int generateFractalImage (const char *fileName, int imHeight, int imWidth,
     
     // Check if writing was successful
     if (result) {
-        printf("PNG file created successfully!\n");
+        printf("%s.png file created successfully!\n", fileName);
     } else {
         printf("Error creating PNG file\n");
     }
@@ -219,39 +222,61 @@ int generateFractalImage (const char *fileName, int imHeight, int imWidth,
     return 0;
 }
 
+// Source - https://stackoverflow.com/a/58228695
+// Posted by Simson, modified by community. See post 'Timeline' for change history
+// Retrieved 2026-03-04, License - CC BY-SA 4.0
 
-
-// Helper function to calculate the greatest common divisor (for aspect ratio)
-unsigned long long gcd(unsigned long long a, unsigned long long b) {
-    while (b) {
-        unsigned long long t = b;
-        b = a % b;
-        a = t;
+void grayscale(int height, int width, RGBTRIPLE image[][]){
+    for(int x=0; x<width ; x++){
+        for(int y=0; y<height; y++){
+            unsigned int colour = 0.299*image[x][y].rgbtRed + 0.587*image[x][y].rgbtGreen + 0.114*image[x][y].rgbtBlue;
+            image[x][y].rgbtRed = colour & 0xFF;
+            image[x][y].rgbtBlue = colour & 0xFF;
+            image[x][y].rgbtGreen = colour & 0xFF;
+         }
     }
-    return a;
 }
+
+
 
 
 int main(){
     rng.s[1] = 69420;
     rng.s[0] = time(NULL);
+     
+    double minX = -2, maxX = 2, minYInit = -2, maxYInit = 2;
 
-    int tWidth  = 600;
-    int tHeight = 600;
+    for (int i = 0; i < 1; i++){
 
-    double minX = -2, maxX = 2, minY = -2, maxY = 2;
-    
-    for (int depth = 0; depth < 10; depth ++){
-        complex coordinates = coordinateFinder(60, 60, minX, maxX, minY, maxY);
+        int tWidth = 100;
+        int tHeight = 100;
 
-        double zoomFactor = 4;
-        minX = lerp(coordinates.a, minX, 1 / zoomFactor);
-        maxX = lerp(coordinates.a, maxX, 1 / zoomFactor);
-        minY = lerp(coordinates.b, minY, 1 / zoomFactor);
-        maxY = lerp(coordinates.b, maxY, 1 / zoomFactor);
+
+        double minY = lerp(minYInit, maxYInit, (1 - ((double)tHeight / tWidth)) / 2 );
+        double maxY = lerp(maxYInit, minYInit, (1 - ((double)tHeight / tWidth)) / 2 );
+        
+        for (int depth = 0; depth < 10; depth ++){
+            complex coordinates = coordinateFinder(60, 60, minX, maxX, minY, maxY);
+
+            double zoomFactor = 4;
+            minX = lerp(coordinates.a, minX, 1 / zoomFactor);
+            maxX = lerp(coordinates.a, maxX, 1 / zoomFactor);
+            minY = lerp(coordinates.b, minY, 1 / zoomFactor);
+            maxY = lerp(coordinates.b, maxY, 1 / zoomFactor);
+        }
+
+        generateFractalImage("test.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.25);
+
+        unsigned char *data = stbi_load("test.png", tWidth, tHeight, 3, 0);
+
+        printf(data);
+
+        char str[100];
+        sprintf(str, "fractal%d.png", i);
+
+        rename("test.png", str);
     }
-    
-    printf("Fractal Address: %lf, %lf, %lf, %lf\n", minX, maxX, minY, maxY);
-    generateFractalImage("darkFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.1);
-    generateFractalImage("lightFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.3);
+    // printf("Fractal Address: %lf, %lf, %lf, %lf\n", minX, maxX, minY, maxY);
+    // generateFractalImage("darkFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.1);
+    // generateFractalImage("lightFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.3);
 }
