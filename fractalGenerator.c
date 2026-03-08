@@ -257,7 +257,8 @@ int edgeResponceCalc (const char * fileName){
     }
 
     int pixelEdgeResponce = 0;
-    int edgeResponce = [0][0];
+    #define quadrantSplit 3
+    int edgeResponce[quadrantSplit][quadrantSplit] = {0};
 
     for(int x = 1; x < imWidth - 1; x++){
         for(int y = 1; y < imHeight - 1; y++){
@@ -286,13 +287,25 @@ int edgeResponceCalc (const char * fileName){
                 )
             ) / 2;
 
-            // TODO make it assign based off the quadrant
+            // Assign based off the quadrant
+            edgeResponce[x / (imWidth / quadrantSplit)]
+                        [y / (imHeight / quadrantSplit)] += pixelEdgeResponce;
         }
     }
 
-    // TODO take the min of quadrants
+    // Find minimum quadrant edge responce 
+    edgeResponce[0][0] -= 5000; // make the center more likely to reject a sample
+    int minQuadrantEdge = edgeResponce[0][0];
+    for (int c = 0; c < quadrantSplit; c++){
+        for (int v = 0; v< quadrantSplit; v++){
+            if ( edgeResponce[c][v] < minQuadrantEdge ){
+                minQuadrantEdge = edgeResponce[c][v];
+            }
+        }
+    }
+
     stbi_image_free(imData);
-    return edgeResponce;
+    return minQuadrantEdge;
 }
 
 
@@ -308,9 +321,11 @@ int main(){
     int tHeight = 2650;
 
     bool foundFractal = false;
+    int edgeResponceCutoff = 50000;
     double minX = -2, maxX = 2, minY = -2, maxY = 2;
 
-    while (foundFractal == false){
+    // while (foundFractal == false){
+    for (int i = 0; i < 100; i++){
         minX = -2, maxX = 2, minY = -2, maxY = 2;
         
         for (int depth = 0; depth < 10; depth ++){
@@ -327,25 +342,24 @@ int main(){
 
         int edgeResponce = abs(edgeResponceCalc("sample.png"));
 
-        unlink("sample.png");
+        // if (absoluteVal(edgeResponce) > 50000){
+        //     foundFractal = true;
+        // }
 
-        if (absoluteVal(edgeResponce) > 350000){
-            foundFractal = true;
-        }
-
-    
-        // char str[100];
-        // sprintf(str, "%d-fractal.png", edgeResponce);
-// 
-        // rename("sample.png", str);
+        if (absoluteVal(edgeResponce) > edgeResponceCutoff){
+            char str[100];
+            sprintf(str, "%d-fractal.png", edgeResponce);
+            rename("sample.png", str);
+        } else unlink("sample.png");
+        
     }
     //Math to fix the aspect ratio when not a square
     // double minY = lerp(minYInit, maxY, (1 - ((double)tHeight / tWidth)) / 2 );
     // double maxY = lerp(maxYInit, minY, (1 - ((double)tHeight / tWidth)) / 2 );
 
-    printf("Fractal Address: %lf, %lf, %lf, %lf\n", minX, maxX, minY, maxY);
-    generateFractalImage("darkFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.1);
-    generateFractalImage("lightFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.3);
+    // printf("Fractal Address: %lf, %lf, %lf, %lf\n", minX, maxX, minY, maxY);
+    // generateFractalImage("darkFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.1);
+    // generateFractalImage("lightFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.3);
 
     return 0;
 }
