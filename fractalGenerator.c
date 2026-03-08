@@ -3,13 +3,13 @@
 #include <stdint.h>
 #include <time.h>
 #include <stdbool.h>
+#include <unistd.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-#include <opencv2/opencv.hpp>
 
 typedef uint64_t u64;
 
@@ -33,6 +33,17 @@ inline static u64 randu64(RNG *r) {
 }
 
 RNG rng;
+
+
+// ----------------- Usefull functions -----------------------------------------
+
+int absoluteVal (int num){
+    if (num < 0){
+        return num * -1;
+    }else {
+        return num;
+    }
+}
 
 
 //  ---------------- Mandlebrot set fractal generator ---------------------------
@@ -143,9 +154,9 @@ complex coordinateFinder(int imHeight, int imWidth,
         printf("\n");
     }
 
-
-    // Initialize the random number generator
-    for (int r = 0; r < 5; r++) randu64(&rng);
+    if (index == 0) {
+        return (complex){lerp(minX,maxX,0.5), lerp(minY,maxY,0.5)};
+    }
     
     // Choose the random edge case.
     int randIndex = randu64(&rng) % index;
@@ -222,38 +233,85 @@ int generateFractalImage (const char *fileName, int imHeight, int imWidth,
     return 0;
 }
 
-// Source - https://stackoverflow.com/a/58228695
-// Posted by Simson, modified by community. See post 'Timeline' for change history
-// Retrieved 2026-03-04, License - CC BY-SA 4.0
 
-void grayscale(int height, int width, RGBTRIPLE image[][]){
-    for(int x=0; x<width ; x++){
-        for(int y=0; y<height; y++){
-            unsigned int colour = 0.299*image[x][y].rgbtRed + 0.587*image[x][y].rgbtGreen + 0.114*image[x][y].rgbtBlue;
-            image[x][y].rgbtRed = colour & 0xFF;
-            image[x][y].rgbtBlue = colour & 0xFF;
-            image[x][y].rgbtGreen = colour & 0xFF;
-         }
+int edgeResponceCalc (const char * fileName){
+    int channels = 3, imWidth = 0, imHeight = 0;
+    printf("%d, %d", imWidth, imHeight);
+
+    unsigned char *imData = stbi_load(fileName, &imWidth, &imHeight, &channels, 0);
+
+    printf("%d, %d", imWidth, imHeight);
+
+    int greyImage[imHeight][imWidth];
+
+
+    for(int x=0; x < imWidth; x++){
+        for(int y=0; y < imHeight; y++){
+            int pixel_index = (y * imWidth + x) * channels;
+            unsigned int colour = 0.299*imData[pixel_index + 0] + 
+                                  0.587*imData[pixel_index + 1] + 
+                                  0.184*imData[pixel_index + 2];
+            greyImage[y][x] = colour;
+            
+        }
     }
+
+    int pixelEdgeResponce = 0;
+    int edgeResponce = [0][0];
+
+    for(int x = 1; x < imWidth - 1; x++){
+        for(int y = 1; y < imHeight - 1; y++){
+
+            pixelEdgeResponce = (
+                absoluteVal(
+                    (greyImage[y - 1][x - 1] * - 1) +
+                    (greyImage[y    ][x - 1] * - 2) +
+                    (greyImage[y + 1][x - 1] * - 1) +
+                    (greyImage[y + 1][x    ] *   0) +
+                    (greyImage[y - 1][x + 1] *   1) +
+                    (greyImage[y    ][x + 1] *   2) +
+                    (greyImage[y + 1][x + 1] *   1) +
+                    (greyImage[y - 1][x    ] *   0)
+                ) +
+
+                absoluteVal(
+                    (greyImage[y - 1][x - 1] * - 1) +
+                    (greyImage[y - 1][x    ] * - 2) +
+                    (greyImage[y - 1][x + 1] * - 1) +
+                    (greyImage[y    ][x + 1] *   0) +
+                    (greyImage[y + 1][x - 1] *   1) +
+                    (greyImage[y + 1][x    ] *   2) +
+                    (greyImage[y + 1][x + 1] *   1) +
+                    (greyImage[y    ][x - 1] *   0)
+                )
+            ) / 2;
+
+            // TODO make it assign based off the quadrant
+        }
+    }
+
+    // TODO take the min of quadrants
+    stbi_image_free(imData);
+    return edgeResponce;
 }
 
 
-
-
 int main(){
+    // Initialize the random number generator
     rng.s[1] = 69420;
     rng.s[0] = time(NULL);
-     
-    double minX = -2, maxX = 2, minYInit = -2, maxYInit = 2;
+    
+    for (int r = 0; r < 5; r++) randu64(&rng);
 
-    for (int i = 0; i < 1; i++){
+    int sampleWidth = 100;
+    int tWidth = 2560;
+    int tHeight = 2650;
 
-        int tWidth = 100;
-        int tHeight = 100;
+    bool foundFractal = false;
+    double minX = -2, maxX = 2, minY = -2, maxY = 2;
 
-
-        double minY = lerp(minYInit, maxYInit, (1 - ((double)tHeight / tWidth)) / 2 );
-        double maxY = lerp(maxYInit, minYInit, (1 - ((double)tHeight / tWidth)) / 2 );
+    while (foundFractal == false){
+        minX = -2, maxX = 2, minY = -2, maxY = 2;
         
         for (int depth = 0; depth < 10; depth ++){
             complex coordinates = coordinateFinder(60, 60, minX, maxX, minY, maxY);
@@ -265,18 +323,29 @@ int main(){
             maxY = lerp(coordinates.b, maxY, 1 / zoomFactor);
         }
 
-        generateFractalImage("test.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.25);
+        generateFractalImage("sample.png", sampleWidth, sampleWidth, minX, maxX, minY, maxY, 0.25);
 
-        unsigned char *data = stbi_load("test.png", tWidth, tHeight, 3, 0);
+        int edgeResponce = abs(edgeResponceCalc("sample.png"));
 
-        printf(data);
+        unlink("sample.png");
 
-        char str[100];
-        sprintf(str, "fractal%d.png", i);
+        if (absoluteVal(edgeResponce) > 350000){
+            foundFractal = true;
+        }
 
-        rename("test.png", str);
+    
+        // char str[100];
+        // sprintf(str, "%d-fractal.png", edgeResponce);
+// 
+        // rename("sample.png", str);
     }
-    // printf("Fractal Address: %lf, %lf, %lf, %lf\n", minX, maxX, minY, maxY);
-    // generateFractalImage("darkFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.1);
-    // generateFractalImage("lightFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.3);
+    //Math to fix the aspect ratio when not a square
+    // double minY = lerp(minYInit, maxY, (1 - ((double)tHeight / tWidth)) / 2 );
+    // double maxY = lerp(maxYInit, minY, (1 - ((double)tHeight / tWidth)) / 2 );
+
+    printf("Fractal Address: %lf, %lf, %lf, %lf\n", minX, maxX, minY, maxY);
+    generateFractalImage("darkFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.1);
+    generateFractalImage("lightFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.3);
+
+    return 0;
 }
