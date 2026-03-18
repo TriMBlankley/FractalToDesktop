@@ -38,6 +38,15 @@ RNG rng;
 
 // ----------------- Usefull functions -----------------------------------------
 
+double lerp(double num1, double num2, double x) {
+    return x * (num2 - num1) + num1;
+}
+
+double unlerp(double num1, double num2, double y) {
+    return (y - num1) / (num2 - num1);
+}
+
+
 int absoluteVal (int num){
     if (num < 0){
         return num * -1;
@@ -87,6 +96,12 @@ RGB oklab_to_linear_srgb(Lab c) {
 		-1.2684380046f * l + 2.6097574011f * m - 0.3413193965f * s,
 		-0.0041960863f * l - 0.7034186147f * m + 1.7076147010f * s,
     };
+}
+
+Lab lerpOkLAB(Lab col1, Lab col2, double x) {
+    return (Lab) { lerp(col1.L, col2.L, x),
+                   lerp(col1.a, col2.a, x),
+                   lerp(col1.b, col2.b, x)};
 }
 
 
@@ -174,22 +189,6 @@ int mandlebrot(complex c, int iterations){
     }
     return -1;    // point IS in set
 }
-
-
-double lerp(double num1, double num2, double x) {
-    return x * (num2 - num1) + num1;
-}
-
-Lab lerpOkLAB(Lab col1, Lab col2, double x) {
-    return (Lab) { lerp(col1.L, col2.L, x),
-                   lerp(col1.a, col2.a, x),
-                   lerp(col1.b, col2.b, x)};
-}
-
-double unlerp(double num1, double num2, double y) {
-    return (y - num1) / (num2 - num1);
-}
-
 
 // -------------- Find a coordintate that borders points in the set -------------------------------------------
 
