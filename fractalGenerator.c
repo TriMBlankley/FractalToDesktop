@@ -10,14 +10,13 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-
 typedef uint64_t u64;
 
 // ----------------- Compiler Macros:
 #define ARRAY_LEN(A) (sizeof(A)/sizeof(*(A)))
 
-// ----------------- Random Number Generation -------------------------------------
 
+// ----------------- Random Number Generation -------------------------------------
 
 typedef struct RNG {
     u64 s[2];
@@ -36,7 +35,6 @@ inline static u64 randu64(RNG *r) {
 }
 
 RNG rng;
-
 
 // ----------------- Usefull functions -----------------------------------------
 
@@ -89,6 +87,55 @@ RGB oklab_to_linear_srgb(Lab c) {
 		-1.2684380046f * l + 2.6097574011f * m - 0.3413193965f * s,
 		-0.0041960863f * l - 0.7034186147f * m + 1.7076147010f * s,
     };
+}
+
+
+// This function generates a gradient in oklab using the ppm format
+void okLABGradientGen (RGB col1, RGB col2, RGB col3,
+                       RGB col4, RGB col5, RGB col6, int iterationPerBand) {
+
+    RGB offsetColorGrad[] = {col2, col3, col4, col5, col6};
+
+
+    printf("P3\n200 2000\n255\n");
+
+    for (int i = 0; i < 20; i++){
+        for (int j = 0; j < 200; j++){
+            printf("255 255 255 ");
+        } 
+    }printf("\n");
+
+    RGB gradTop = {0, 0, 0};
+    RGB gradBottom = {0, 0, 0};
+    int offset = randu64(&rng) % 5;
+
+    for (int c = 0; c < 6; c++){
+        if (c == 0) gradTop = col1;
+        else gradTop = offsetColorGrad[
+            (c + offset) % ARRAY_LEN(offsetColorGrad)
+        ];
+        gradBottom = offsetColorGrad[
+            (c + 1 + offset) % ARRAY_LEN(offsetColorGrad)
+        ];
+
+        Lab gradTopLab = linear_srgb_to_oklab(gradTop);
+        Lab gradBottomLab = linear_srgb_to_oklab(gradBottom);
+
+        for (int i = 0; i < iterationPerBand; i++){
+            float x = i / (float) iterationPerBand;
+            RGB currentColor = oklab_to_linear_srgb((Lab){
+                lerp(gradTopLab.L, gradBottomLab.L, x),
+                lerp(gradTopLab.a, gradBottomLab.a, x),
+                lerp(gradTopLab.b, gradBottomLab.b, x)
+            });
+            for (int j = 0; j < 200; j++){
+                printf("%d %d %d ", (int) currentColor.r, 
+                                    (int) currentColor.g, 
+                                    (int) currentColor.b);
+            } 
+        }
+        printf("\n");
+    }
 }
 
 //  ---------------- Mandlebrot set fractal generator ---------------------------
@@ -225,8 +272,82 @@ complex coordinateFinder(int imHeight, int imWidth,
     };
 };
 
-// ---------------  Final fractal Image Generation ----------------------------
+int edgeResponceCalc (const char * fileName){
+    int channels = 3, imWidth = 0, imHeight = 0;
+    printf("%d, %d", imWidth, imHeight);
 
+    unsigned char *imData = stbi_load(fileName, &imWidth, &imHeight, &channels, 0);
+
+    printf("%d, %d", imWidth, imHeight);
+
+    int greyImage[imHeight][imWidth];
+
+
+    for(int x=0; x < imWidth; x++){
+        for(int y=0; y < imHeight; y++){
+            int pixel_index = (y * imWidth + x) * channels;
+            unsigned int colour = 0.299*imData[pixel_index + 0] + 
+                                  0.587*imData[pixel_index + 1] + 
+                                  0.184*imData[pixel_index + 2];
+            greyImage[y][x] = colour;
+            
+        }
+    }
+
+    int pixelEdgeResponce = 0;
+    #define quadrantSplit 3
+    int edgeResponce[quadrantSplit][quadrantSplit] = {0};
+
+    for(int x = 1; x < imWidth - 1; x++){
+        for(int y = 1; y < imHeight - 1; y++){
+
+            pixelEdgeResponce = (
+                absoluteVal(
+                    (greyImage[y - 1][x - 1] * - 1) +
+                    (greyImage[y    ][x - 1] * - 2) +
+                    (greyImage[y + 1][x - 1] * - 1) +
+                    (greyImage[y + 1][x    ] *   0) +
+                    (greyImage[y - 1][x + 1] *   1) +
+                    (greyImage[y    ][x + 1] *   2) +
+                    (greyImage[y + 1][x + 1] *   1) +
+                    (greyImage[y - 1][x    ] *   0)
+                ) +
+
+                absoluteVal(
+                    (greyImage[y - 1][x - 1] * - 1) +
+                    (greyImage[y - 1][x    ] * - 2) +
+                    (greyImage[y - 1][x + 1] * - 1) +
+                    (greyImage[y    ][x + 1] *   0) +
+                    (greyImage[y + 1][x - 1] *   1) +
+                    (greyImage[y + 1][x    ] *   2) +
+                    (greyImage[y + 1][x + 1] *   1) +
+                    (greyImage[y    ][x - 1] *   0)
+                )
+            ) / 2;
+
+            // Assign based off the quadrant
+            edgeResponce[x / (imWidth / quadrantSplit)]
+                        [y / (imHeight / quadrantSplit)] += pixelEdgeResponce;
+        }
+    }
+
+    // Find minimum quadrant edge responce 
+    edgeResponce[0][0] -= 5000; // make the center more likely to reject a sample
+    int minQuadrantEdge = edgeResponce[0][0];
+    for (int c = 0; c < quadrantSplit; c++){
+        for (int v = 0; v< quadrantSplit; v++){
+            if ( edgeResponce[c][v] < minQuadrantEdge ){
+                minQuadrantEdge = edgeResponce[c][v];
+            }
+        }
+    }
+
+    stbi_image_free(imData);
+    return minQuadrantEdge;
+}
+
+
+// ---------------  Final fractal Image Generation ----------------------------
 int generateFractalImage (const char *fileName, int imHeight, int imWidth, 
                           double minX, double maxX, 
                           double minY, double maxY, double palleteSweep, bool isLight){
@@ -240,7 +361,6 @@ int generateFractalImage (const char *fileName, int imHeight, int imWidth,
     if (!image_data) {
         return -1; // Allocation failed
     }
-
 
     // Iterate over x, and y to find the pixel at each point of the image
     for (int y = 0; y < imHeight; y++){
@@ -308,7 +428,6 @@ int generateFractalImagePreDefinedColorPallete (const char *fileName,
     RGB baseCol, RGB col1, RGB col2,
     RGB col3, RGB col4, RGB col5, 
     int iterationPerBand, int minIteration, int offset, bool isLight) {
-
 
     RGB offsetColorGrad[] = {col1, col2, col3, col4, col5};
     Lab gradTop = {0, 0, 0};
@@ -401,129 +520,6 @@ int generateFractalImagePreDefinedColorPallete (const char *fileName,
 }
 
 
-int edgeResponceCalc (const char * fileName){
-    int channels = 3, imWidth = 0, imHeight = 0;
-    printf("%d, %d", imWidth, imHeight);
-
-    unsigned char *imData = stbi_load(fileName, &imWidth, &imHeight, &channels, 0);
-
-    printf("%d, %d", imWidth, imHeight);
-
-    int greyImage[imHeight][imWidth];
-
-
-    for(int x=0; x < imWidth; x++){
-        for(int y=0; y < imHeight; y++){
-            int pixel_index = (y * imWidth + x) * channels;
-            unsigned int colour = 0.299*imData[pixel_index + 0] + 
-                                  0.587*imData[pixel_index + 1] + 
-                                  0.184*imData[pixel_index + 2];
-            greyImage[y][x] = colour;
-            
-        }
-    }
-
-    int pixelEdgeResponce = 0;
-    #define quadrantSplit 3
-    int edgeResponce[quadrantSplit][quadrantSplit] = {0};
-
-    for(int x = 1; x < imWidth - 1; x++){
-        for(int y = 1; y < imHeight - 1; y++){
-
-            pixelEdgeResponce = (
-                absoluteVal(
-                    (greyImage[y - 1][x - 1] * - 1) +
-                    (greyImage[y    ][x - 1] * - 2) +
-                    (greyImage[y + 1][x - 1] * - 1) +
-                    (greyImage[y + 1][x    ] *   0) +
-                    (greyImage[y - 1][x + 1] *   1) +
-                    (greyImage[y    ][x + 1] *   2) +
-                    (greyImage[y + 1][x + 1] *   1) +
-                    (greyImage[y - 1][x    ] *   0)
-                ) +
-
-                absoluteVal(
-                    (greyImage[y - 1][x - 1] * - 1) +
-                    (greyImage[y - 1][x    ] * - 2) +
-                    (greyImage[y - 1][x + 1] * - 1) +
-                    (greyImage[y    ][x + 1] *   0) +
-                    (greyImage[y + 1][x - 1] *   1) +
-                    (greyImage[y + 1][x    ] *   2) +
-                    (greyImage[y + 1][x + 1] *   1) +
-                    (greyImage[y    ][x - 1] *   0)
-                )
-            ) / 2;
-
-            // Assign based off the quadrant
-            edgeResponce[x / (imWidth / quadrantSplit)]
-                        [y / (imHeight / quadrantSplit)] += pixelEdgeResponce;
-        }
-    }
-
-    // Find minimum quadrant edge responce 
-    edgeResponce[0][0] -= 5000; // make the center more likely to reject a sample
-    int minQuadrantEdge = edgeResponce[0][0];
-    for (int c = 0; c < quadrantSplit; c++){
-        for (int v = 0; v< quadrantSplit; v++){
-            if ( edgeResponce[c][v] < minQuadrantEdge ){
-                minQuadrantEdge = edgeResponce[c][v];
-            }
-        }
-    }
-
-    stbi_image_free(imData);
-    return minQuadrantEdge;
-}
-
-
-void okLABGradientGen (RGB col1, RGB col2, RGB col3,
-                       RGB col4, RGB col5, RGB col6, int iterationPerBand) {
-
-    RGB offsetColorGrad[] = {col2, col3, col4, col5, col6};
-
-
-    printf("P3\n200 2000\n255\n");
-
-    for (int i = 0; i < 20; i++){
-        for (int j = 0; j < 200; j++){
-            printf("255 255 255 ");
-        } 
-    }printf("\n");
-
-    RGB gradTop = {0, 0, 0};
-    RGB gradBottom = {0, 0, 0};
-    int offset = randu64(&rng) % 5;
-
-    for (int c = 0; c < 6; c++){
-        if (c == 0) gradTop = col1;
-        else gradTop = offsetColorGrad[
-            (c + offset) % ARRAY_LEN(offsetColorGrad)
-        ];
-        gradBottom = offsetColorGrad[
-            (c + 1 + offset) % ARRAY_LEN(offsetColorGrad)
-        ];
-
-        Lab gradTopLab = linear_srgb_to_oklab(gradTop);
-        Lab gradBottomLab = linear_srgb_to_oklab(gradBottom);
-
-        for (int i = 0; i < iterationPerBand; i++){
-            float x = i / (float) iterationPerBand;
-            RGB currentColor = oklab_to_linear_srgb((Lab){
-                lerp(gradTopLab.L, gradBottomLab.L, x),
-                lerp(gradTopLab.a, gradBottomLab.a, x),
-                lerp(gradTopLab.b, gradBottomLab.b, x)
-            });
-            for (int j = 0; j < 200; j++){
-                printf("%d %d %d ", (int) currentColor.r, 
-                                    (int) currentColor.g, 
-                                    (int) currentColor.b);
-            } 
-        }
-        printf("\n");
-    }
-}
-
-
 int main(){
     // Initialize the random number generator
     rng.s[1] = 69420;
@@ -531,20 +527,19 @@ int main(){
     
     for (int r = 0; r < 5; r++) randu64(&rng);
 
-    //int 0x
     // Initialize Colors:
-    RGB lightBaseCol = {255, 252, 215};
+    RGB lightBaseCol = {250, 250, 250};
     RGB lightCol1 = {104, 0, 150};
     RGB lightCol2 = {0, 128, 133};
-    RGB lightCol3 = {52, 134, 0};
+    RGB lightCol3 = {0, 133, 58};
     RGB lightCol4 = {168, 138, 0};
     RGB lightCol5 = {170, 50, 50};
 
 
-    RGB darkBaseCol = {28, 25, 45};
+    RGB darkBaseCol = {20, 20, 20};
     RGB darkCol1 = {217, 136, 255};
     RGB darkCol2 = {136, 251, 255};
-    RGB darkCol3 = {198, 255, 167};
+    RGB darkCol3 = {135, 230, 163};
     RGB darkCol4 = {255, 233, 139};
     RGB darkCol5 = {255, 139, 139};
 
@@ -554,10 +549,10 @@ int main(){
     // return 0; 
 
     int sampleWidth = 100;
-    int tHeight = 1504;
-    int tWidth = 2256;
-    // int tHeight = 300;
-    // int tWidth = 450;
+    // int tHeight = 1504;
+    // int tWidth = 2256;
+    int tHeight = 300;
+    int tWidth = 450;
 
     int minIteration;
     bool foundFractal = false;
@@ -614,7 +609,6 @@ int main(){
             darkBaseCol, darkCol1, darkCol2, darkCol3, darkCol4, darkCol5,
             70, minIteration, offset, false);
     }
-
     
     return 0;
 }
