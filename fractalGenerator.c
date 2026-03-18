@@ -229,7 +229,7 @@ complex coordinateFinder(int imHeight, int imWidth,
 
 int generateFractalImage (const char *fileName, int imHeight, int imWidth, 
                           double minX, double maxX, 
-                          double minY, double maxY, double palleteSweep){
+                          double minY, double maxY, double palleteSweep, bool isLight){
                           
     int channels = 3; // RGB image
     
@@ -262,10 +262,19 @@ int generateFractalImage (const char *fileName, int imHeight, int imWidth,
                     }, 2000);
                     iterations = iterations * palleteSweep;
 
-                    image_data[pixel_index + 0] += lerp(0, 255, unlerp(-1, 1, -cos(iterations * 0.10))) / 9;
-                    image_data[pixel_index + 1] += lerp(0, 255, unlerp(-1, 1, -cos(iterations * 0.11))) / 9;
-                    image_data[pixel_index + 2] += lerp(0, 255, unlerp(-1, 1, -cos(iterations * 0.13))) / 9;
-
+                    if ((iterations < 0) && (isLight == true)){
+                        image_data[pixel_index + 0] += 255 / 9;
+                        image_data[pixel_index + 1] += 255 / 9;
+                        image_data[pixel_index + 2] += 255 / 9;
+                    }else if ((iterations < 0) && (isLight == false)){
+                        image_data[pixel_index + 0] += 0 / 9;
+                        image_data[pixel_index + 1] += 0 / 9;
+                        image_data[pixel_index + 2] += 0 / 9;
+                    }else {
+                        image_data[pixel_index + 0] += lerp(0, 255, unlerp(-1, 1, -cos(iterations * 0.10))) / 9;
+                        image_data[pixel_index + 1] += lerp(0, 255, unlerp(-1, 1, -cos(iterations * 0.11))) / 9;
+                        image_data[pixel_index + 2] += lerp(0, 255, unlerp(-1, 1, -cos(iterations * 0.13))) / 9;
+                    }
                 }
             }
         }
@@ -298,13 +307,13 @@ int generateFractalImagePreDefinedColorPallete (const char *fileName,
     double minY, double maxY, 
     RGB baseCol, RGB col1, RGB col2,
     RGB col3, RGB col4, RGB col5, 
-    int iterationPerBand, int minIteration, int offset) {// TODO Use the min iteration
+    int iterationPerBand, int minIteration, int offset, bool isLight) {
 
-    
 
     RGB offsetColorGrad[] = {col1, col2, col3, col4, col5};
     Lab gradTop = {0, 0, 0};
     Lab gradBottom = {0, 0, 0};
+    RGB currentColor = {0, 0, 0};
     
    
     int channels = 3; // RGB image
@@ -335,10 +344,8 @@ int generateFractalImagePreDefinedColorPallete (const char *fileName,
                         lerp(minY, maxY, unlerp(imHeight, 0, y + ySample / 3))
                     }, 2000) - minIteration;
 
-
                     // Define the top and bottom of the current color band
                     int c = iterations / iterationPerBand;
-
                     gradTop = lerpOkLAB(
                         linear_srgb_to_oklab(baseCol), 
                         linear_srgb_to_oklab(
@@ -353,13 +360,16 @@ int generateFractalImagePreDefinedColorPallete (const char *fileName,
                         ),
                         (float) ( c + 1) / (c + 2)
                     );
-
                     float x = ((int) iterations % iterationPerBand) / (float) iterationPerBand;
-
-
                     RGB currentColor = oklab_to_linear_srgb(
                         lerpOkLAB(gradTop, gradBottom, x)
                     );
+                
+                    if ((iterations <= -1) && (isLight == true)){
+                        currentColor = (RGB) {255, 255, 255};
+                    }else if ((iterations <= -1) && (isLight == false)){
+                        currentColor = (RGB) {0, 0, 0};
+                    }
 
                     image_data[pixel_index + 0] += currentColor.r / 9;
                     image_data[pixel_index + 1] += currentColor.g / 9;
@@ -541,9 +551,7 @@ int main(){
 
     // okLABGradientGen (lightCol1, lightCol2, lightCol3,
     //                   lightCol4, lightCol5, lightCol6, 300);
-    // return 0;
-
-    
+    // return 0; 
 
     int sampleWidth = 100;
     int tHeight = 1504;
@@ -556,11 +564,14 @@ int main(){
     int edgeResponceCutoff = 50000;
     double minX = -2, maxX = 2, minY = -2, maxY = 2;
 
+    
+
     while (foundFractal == false){
-    // for (int i = 0; i < 100; i++){
+        int targetDepth = randu64(&rng) % 10;
+
         minX = -2, maxX = 2, minY = -2, maxY = 2;
 
-        for (int depth = 0; depth < 10; depth ++){
+        for (int depth = 0; depth < targetDepth; depth ++){
             minIteration = 100;
             complex coordinates = coordinateFinder(60, 60, minX, maxX, minY, maxY, &minIteration);
 
@@ -571,19 +582,13 @@ int main(){
             maxY = lerp(coordinates.b, maxY, 1 / zoomFactor);
         }
 
-        generateFractalImage("sample.png", sampleWidth, sampleWidth, minX, maxX, minY, maxY, 0.25);
+        generateFractalImage("sample.png", sampleWidth, sampleWidth, minX, maxX, minY, maxY, 0.25, true);
 
         int edgeResponce = abs(edgeResponceCalc("sample.png"));
         if (absoluteVal(edgeResponce) > 50000){
             foundFractal = true;
         }
-        // foundFractal = true;
 
-        // if (absoluteVal(edgeResponce) > edgeResponceCutoff){
-        //     char str[100];
-        //     sprintf(str, "%d-fractal.png", edgeResponce);
-        //     rename("sample.png", str);
-        // } else unlink("sample.png"); 
         unlink("sample.png"); 
     }
     //Math to fix the aspect ratio when not a square
@@ -591,18 +596,24 @@ int main(){
     maxY = lerp(maxY, minY, (1 - ((double)tHeight / tWidth)) / 2 );
 
     printf("Fractal Address: %lf, %lf, %lf, %lf\n, minimum iterations: %d \n", minX, maxX, minY, maxY, minIteration);
-    // generateFractalImage("darkFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.1);
-    // generateFractalImage("lightFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.25);
 
-    int offset = randu64(&rng) % 5;
-    generateFractalImagePreDefinedColorPallete("lightFractal.png", 
-        tHeight, tWidth, minX, maxX, minY, maxY,
-        lightBaseCol, lightCol1, lightCol2, lightCol3, lightCol4, lightCol5,
-        70, minIteration, offset);
-    generateFractalImagePreDefinedColorPallete("darkFractal.png", 
-        tHeight, tWidth, minX, maxX, minY, maxY,
-        darkBaseCol, darkCol1, darkCol2, darkCol3, darkCol4, darkCol5,
-        70, minIteration, offset);
+    // Choose the method used to generate the fractals
+    int imageGenType = randu64(&rng) % 10;
+
+    if ((imageGenType % 3) == 0){
+        generateFractalImage("darkFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.1, false);
+        generateFractalImage("lightFractal.png", tHeight, tWidth, minX, maxX, minY, maxY, 0.25, true);
+    }else {
+        int offset = randu64(&rng) % 5;
+        generateFractalImagePreDefinedColorPallete("lightFractal.png", 
+            tHeight, tWidth, minX, maxX, minY, maxY,
+            lightBaseCol, lightCol1, lightCol2, lightCol3, lightCol4, lightCol5,
+            70, minIteration, offset, true);
+        generateFractalImagePreDefinedColorPallete("darkFractal.png", 
+            tHeight, tWidth, minX, maxX, minY, maxY,
+            darkBaseCol, darkCol1, darkCol2, darkCol3, darkCol4, darkCol5,
+            70, minIteration, offset, false);
+    }
 
     
     return 0;
