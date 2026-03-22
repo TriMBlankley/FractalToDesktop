@@ -241,6 +241,7 @@ complex coordinateFinder(int imHeight, int imWidth,
     }
 
     // ---------- Simple Terminal View ---------------------------------------
+    /* 
     for (int yPrint = 1; yPrint < imHeight - 1; yPrint++){
         for (int xPrint = 1; xPrint < imWidth - 1; xPrint++){
             bool isEdge = false;
@@ -255,7 +256,7 @@ complex coordinateFinder(int imHeight, int imWidth,
             }
         }
         printf("\n");
-    }
+    } */
 
     if (index == 0) {
         return (complex){lerp(minX,maxX,0.5), lerp(minY,maxY,0.5)};
@@ -519,7 +520,7 @@ int generateFractalImagePreDefinedColorPallete (const char *fileName,
 }
 
 
-int main(){
+int main(int argc, char *argv[]){
     // Initialize the random number generator
     rng.s[1] = 69420;
     rng.s[0] = time(NULL);
@@ -550,8 +551,8 @@ int main(){
     int sampleWidth = 100;
     // int tHeight = 1504;
     // int tWidth = 2256;
-    int tHeight = 300;
-    int tWidth = 450;
+    int tHeight = atoi(argv[1]);
+    int tWidth = atoi(argv[2]);
 
     int minIteration;
     bool foundFractal = false;
